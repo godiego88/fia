@@ -1,4 +1,4 @@
-# fia
+# fia-project
 # FIA – Financial Intelligence Agent
 
 This repository contains the **bare-bones project structure** for FIA.
