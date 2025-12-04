@@ -1,0 +1,19 @@
+{
+  "cost_guardrails": {
+    "monthly_hard_stop": 1.80,
+    "reservation_ttl_hours": 4
+  },
+  "run_settings": {
+    "dry_run": true,
+    "max_concurrent_fly_jobs": 1
+  },
+  "trigger_thresholds": {
+    "signal_score_min": 0.15,
+    "zscore_abs_min": 2.0,
+    "max_signals_per_run": 15
+  },
+  "paths": {
+    "stage1_artifact": "trigger_context.json",
+    "stage2_artifact": "deep_results.json"
+  }
+}
