@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FIA Configuration Schema",
+  "type": "object",
+  "properties": {
+    "cost_guardrails": {
+      "type": "object",
+      "properties": {
+        "monthly_hard_stop": { "type": "number" },
+        "reservation_ttl_hours": { "type": "number" }
+      },
+      "required": ["monthly_hard_stop", "reservation_ttl_hours"]
+    },
+    "run_settings": {
+      "type": "object",
+      "properties": {
+        "dry_run": { "type": "boolean" },
+        "max_concurrent_fly_jobs": { "type": "number" }
+      },
+      "required": ["dry_run", "max_concurrent_fly_jobs"]
+    },
+    "trigger_thresholds": {
+      "type": "object",
+      "properties": {
+        "signal_score_min": { "type": "number" },
+        "zscore_abs_min": { "type": "number" },
+        "max_signals_per_run": { "type": "number" }
+      },
+      "required": ["signal_score_min", "zscore_abs_min", "max_signals_per_run"]
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "stage1_artifact": { "type": "string" },
+        "stage2_artifact": { "type": "string" }
+      },
+      "required": ["stage1_artifact", "stage2_artifact"]
+    }
+  },
+  "required": ["cost_guardrails", "run_settings", "trigger_thresholds", "paths"]
+}
