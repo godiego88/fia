@@ -1,0 +1,20 @@
+name: FIA Reconciliation Job (Skeleton)
+
+on:
+  workflow_dispatch:     # manual trigger only for now
+
+jobs:
+  reconcile_skeleton:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Reconciliation placeholder
+        run: |
+          echo "Reconciliation job skeleton created. No logic yet."
