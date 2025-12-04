@@ -1,0 +1,20 @@
+name: FIA Stage 2 (Skeleton)
+
+on:
+  workflow_dispatch:     # manual trigger only for now
+
+jobs:
+  stage2_skeleton:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Stage 2 placeholder
+        run: |
+          echo "Stage 2 workflow skeleton created. No logic yet."
