@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environments
+.env
+venv/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+
+# FIA local artifacts (not used yet)
+trigger_context.json
+deep_results.json
