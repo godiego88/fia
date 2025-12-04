@@ -1,0 +1,21 @@
+[project]
+name = "fia"
+version = "0.1.0"
+description = "Financial Intelligence Automaton"
+requires-python = ">=3.11"
+
+[tool.pdm]
+allow_prereleases = false
+
+[tool.pdm.dev-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools]
+packages = [
+    "fia",
+    "runners",
+    "brains.qb1",
+    "brains.qb2",
+    "brains.nb1",
+    "brains.nb2"
+]
