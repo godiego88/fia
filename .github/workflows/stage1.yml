@@ -1,20 +1,41 @@
-name: FIA Stage 1 (Skeleton)
+name: FIA — Stage 1 Runner
 
 on:
-  workflow_dispatch:     # manual trigger only for now
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'    # Every 6 hours (adjust if needed)
 
 jobs:
-  stage1_skeleton:
+  stage1:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Setup Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Stage 1 placeholder
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
         run: |
-          echo "Stage 1 workflow skeleton created. No logic yet."
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Stage 1
+        env:
+          DRY_RUN_MODE: "true"                 # safe mode
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          # add TwelveData / Finnhub keys when ready:
+          # TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}
+          # FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: |
+          python runners/stage1_runner.py
