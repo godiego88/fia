@@ -9,7 +9,7 @@ import os
 import logging
 from typing import Optional, Dict, Any
 
-from supabase import create_client, Client  # modern client
+from supabase import create_client, Client
 
 _logger = logging.getLogger("fia.supabase_client")
 _logger.setLevel(os.environ.get("FIA_LOG_LEVEL", "INFO"))
@@ -30,8 +30,8 @@ def get_supabase() -> Optional[Client]:
     if _supabase_instance:
         return _supabase_instance
 
-    url = os.environ.get("SUPABASE_DB_URL") or None
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or None
+    url = os.environ.get("SUPABASE_DB_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
     if not url or not key:
         _logger.debug("Supabase not configured (env keys missing).")
@@ -61,7 +61,6 @@ def safe_log_run_start(stage: str, config_snapshot: Dict[str, Any], live_mode: b
             "live_mode": live_mode,
             "timestamp": None,
         }
-        # modern client uses from_ for tables
         sb.table("run_log").insert(row).execute()
         return run_id
     except Exception as e:
