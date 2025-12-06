@@ -1,20 +1,38 @@
-name: FIA Reconciliation Job (Skeleton)
+name: FIA - Reconcile
 
 on:
-  workflow_dispatch:     # manual trigger only for now
+  workflow_dispatch:
 
 jobs:
-  reconcile_skeleton:
+  reconcile:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Reconciliation placeholder
+      - name: Install dependencies
         run: |
-          echo "Reconciliation job skeleton created. No logic yet."
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Load secrets (safe: only Supabase keys used if present)
+      - name: Export environment variables
+        run: |
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> $GITHUB_ENV
+          echo "SUPABASE_DB_URL=${{ secrets.SUPABASE_DB_URL }}" >> $GITHUB_ENV
+
+      - name: Run reconcile job
+        run: |
+          python runners/reconcile_runner.py
+
+      - name: Upload reconcile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconcile_report
+          path: reconcile_report.json
