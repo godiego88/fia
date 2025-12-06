@@ -1,129 +1,84 @@
+# fia/supabase_client.py
+"""
+Supabase client wrapper — compatible with Supabase Python client v2.
+Provides a get_supabase() singleton and safe logging helpers.
+"""
+
+from __future__ import annotations
 import os
-from typing import Any, Dict, Optional
-from supabase import create_client, Client
+import logging
+from typing import Optional, Dict, Any
+
+from supabase import create_client, Client  # modern client
+
+_logger = logging.getLogger("fia.supabase_client")
+_logger.setLevel(os.environ.get("FIA_LOG_LEVEL", "INFO"))
+if not _logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    _logger.addHandler(ch)
+
+_supabase_instance: Optional[Client] = None
 
 
-class SupabaseClient:
+def get_supabase() -> Optional[Client]:
     """
-    Central Supabase wrapper for FIA.
-    Handles:
-    - Config fetch (used by config_loader)
-    - Run logging (stage1, stage2)
-    - Reservation lifecycle
-    - Usage tracking for cost guardrails
+    Return a singleton Supabase client or None if not configured.
+    Uses SUPABASE_DB_URL and SUPABASE_SERVICE_ROLE_KEY env vars.
     """
+    global _supabase_instance
+    if _supabase_instance:
+        return _supabase_instance
 
-    def __init__(self):
-        url = os.getenv("SUPABASE_DB_URL")
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    url = os.environ.get("SUPABASE_DB_URL") or None
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or None
 
-        if not url or not key:
-            raise RuntimeError(
-                "Missing Supabase environment vars: SUPABASE_DB_URL / SUPABASE_SERVICE_ROLE_KEY"
-            )
-
-        self.client: Client = create_client(url, key)
-
-    # -------------------------------------------------------------
-    # CONFIG TABLE
-    # -------------------------------------------------------------
-    def fetch_config_rows(self) -> Dict[str, Any]:
-        """Returns { key: value } for all rows."""
-        res = self.client.table("config").select("*").execute()
-        rows = res.data or []
-
-        out = {}
-        for row in rows:
-            out[row["key"]] = row["value"]
-
-        return out
-
-    # -------------------------------------------------------------
-    # RUN LOGGING
-    # -------------------------------------------------------------
-    def log_stage1_run(self, metadata: Dict[str, Any]) -> None:
-        self.client.table("stage1_runs").insert(metadata).execute()
-
-    def log_stage2_run(self, metadata: Dict[str, Any]) -> None:
-        self.client.table("stage2_runs").insert(metadata).execute()
-
-    # -------------------------------------------------------------
-    # STAGE ARTIFACT STORAGE
-    # -------------------------------------------------------------
-    def store_stage1_artifact(self, run_id: str, artifact: Dict[str, Any]) -> None:
-        """Stores trigger_context.json contents."""
-        self.client.table("stage1_artifacts").insert({
-            "run_id": run_id,
-            "artifact": artifact
-        }).execute()
-
-    def store_stage2_artifact(self, run_id: str, artifact: Dict[str, Any]) -> None:
-        """Stores deep_results.json contents."""
-        self.client.table("stage2_artifacts").insert({
-            "run_id": run_id,
-            "artifact": artifact
-        }).execute()
-
-    # -------------------------------------------------------------
-    # RESERVATION SYSTEM
-    # -------------------------------------------------------------
-    def create_reservation(self, run_id: str, ttl_hours: int) -> None:
-        """Creates a time-limited Stage 2 reservation."""
-        self.client.table("reservations").insert({
-            "run_id": run_id,
-            "ttl_hours": ttl_hours
-        }).execute()
-
-    def get_active_reservation(self) -> Optional[Dict[str, Any]]:
-        """Return the most recent active reservation (if any)."""
-        res = (
-            self.client
-            .rpc("get_active_reservation")   # using stored function
-            .execute()
-        )
-        if res.data:
-            return res.data[0]
+    if not url or not key:
+        _logger.debug("Supabase not configured (env keys missing).")
         return None
 
-    def expire_reservation(self, reservation_id: int) -> None:
-        self.client.table("reservations").update({
-            "expired": True
-        }).eq("id", reservation_id).execute()
+    try:
+        _supabase_instance = create_client(url, key)
+        return _supabase_instance
+    except Exception as e:
+        _logger.exception("Failed to create supabase client: %s", e)
+        return None
 
-    # -------------------------------------------------------------
-    # COST & USAGE TRACKING
-    # -------------------------------------------------------------
-    def insert_usage(self, stage: str, usd_cost: float, details: Dict[str, Any]) -> None:
-        """Records usage cost per run (used by guardrails)."""
-        self.client.table("usage").insert({
+
+def safe_log_run_start(stage: str, config_snapshot: Dict[str, Any], live_mode: bool) -> Optional[str]:
+    """
+    Insert a run_log row if Supabase configured. Return run_id or None.
+    """
+    sb = get_supabase()
+    if sb is None:
+        return None
+    try:
+        run_id = os.urandom(8).hex()
+        row = {
+            "run_id": run_id,
             "stage": stage,
-            "usd_cost": usd_cost,
-            "details": details
-        }).execute()
-
-    def get_monthly_cost(self) -> float:
-        """Returns sum(usd_cost) for the current month."""
-        res = self.client.rpc("get_monthly_cost").execute()
-        return float(res.data or 0.0)
-
-    # -------------------------------------------------------------
-    # UTILITY
-    # -------------------------------------------------------------
-    def heartbeat(self) -> bool:
-        """Simple test query to confirm DB connectivity."""
-        try:
-            self.client.table("config").select("key").limit(1).execute()
-            return True
-        except:
-            return False
+            "config_snapshot": config_snapshot,
+            "live_mode": live_mode,
+            "timestamp": None,
+        }
+        # modern client uses from_ for tables
+        sb.table("run_log").insert(row).execute()
+        return run_id
+    except Exception as e:
+        _logger.exception("safe_log_run_start failed: %s", e)
+        return None
 
 
-# Singleton accessor
-_supabase_instance: Optional[SupabaseClient] = None
-
-
-def get_supabase() -> SupabaseClient:
-    global _supabase_instance
-    if _supabase_instance is None:
-        _supabase_instance = SupabaseClient()
-    return _supabase_instance
+def safe_log_run_end(run_id: Optional[str], success: bool, details: Dict[str, Any]):
+    """
+    Patch run_log row with end status. Safe no-op if not configured.
+    """
+    if not run_id:
+        return
+    sb = get_supabase()
+    if sb is None:
+        return
+    try:
+        sb.table("run_log").update({"success": success, "details": details}).eq("run_id", run_id).execute()
+    except Exception as e:
+        _logger.exception("safe_log_run_end failed: %s", e)
