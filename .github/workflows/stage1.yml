@@ -1,41 +1,57 @@
-name: FIA — Stage 1 Runner
+name: FIA Stage 1
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'    # Every 6 hours (adjust if needed)
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
 
 jobs:
   stage1:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Write FRED_API_KEY
+        if: env.FRED_API_KEY != ''
+        run: |
+          echo "FRED_API_KEY=${{ secrets.FRED_API_KEY }}" >> $GITHUB_ENV
+
+      - name: Write Twelve Data + Finnhub Keys if provided
+        run: |
+          if [ "${{ secrets.TWELVE_DATA_KEY }}" != "" ]; then
+            echo "TWELVE_DATA_KEY=${{ secrets.TWELVE_DATA_KEY }}" >> $GITHUB_ENV
+          fi
+          if [ "${{ secrets.FINNHUB_API_KEY }}" != "" ]; then
+            echo "FINNHUB_API_KEY=${{ secrets.FINNHUB_API_KEY }}" >> $GITHUB_ENV
+          fi
+
+      - name: Google Sheets credentials
+        if: secrets.GOOGLE_SHEETS_CREDENTIALS != ''
+        run: |
+          echo "GOOGLE_SHEETS_CREDENTIALS=${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}" >> $GITHUB_ENV
+
       - name: Run Stage 1
         env:
-          DRY_RUN_MODE: "true"                 # safe mode
-          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-          # add TwelveData / Finnhub keys when ready:
-          # TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}
-          # FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          DRY_RUN_MODE: "true"
         run: |
           python runners/stage1_runner.py
+
+      - name: Upload trigger_context.json artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trigger_context
+          path: trigger_context.json
+          retention-days: 14
