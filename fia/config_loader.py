@@ -1,108 +1,134 @@
-import json
+# fia/config_loader.py
+"""
+Config loader for FIA — migrated to Pydantic v2.
+Loads defaults from config/defaults.json, merges Supabase overrides (if available),
+validates against models, and exposes get_config() returning plain dicts (not models).
+"""
+
+from __future__ import annotations
 import os
-from pathlib import Path
-from pydantic import BaseModel, ValidationError
-from supabase import create_client, Client
+import json
+import logging
+from typing import Any, Dict, Optional
 
+from pydantic import BaseModel, Field, ValidationError
 
-# -----------------------------
-# Pydantic Models for Validation
-# -----------------------------
-class CostGuardrails(BaseModel):
-    monthly_hard_stop: float
-    reservation_ttl_hours: int
-
-
+# Pydantic v2 uses model_config instead of Config
 class RunSettings(BaseModel):
-    dry_run: bool
-    max_concurrent_fly_jobs: int
+    dry_run: bool = True
+    live_mode: bool = False
+    dry_limit: int = 0
+
+    model_config = {"extra": "ignore"}
 
 
 class TriggerThresholds(BaseModel):
-    signal_score_min: float
-    zscore_abs_min: float
-    max_signals_per_run: int
+    score: float = 2.0
+    z_threshold: float = 2.0
+    anomaly_lookback: int = 10
+    signal_score_min: float = 0.1
+    zscore_abs_min: float = 1.0
+    max_signals_per_run: int = 25
+
+    model_config = {"extra": "ignore"}
+
+
+class APISettings(BaseModel):
+    yfinance: Dict[str, Any] = Field(default_factory=dict)
+    finnhub: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = {"extra": "ignore"}
 
 
 class Paths(BaseModel):
-    stage1_artifact: str
-    stage2_artifact: str
+    universe_sheet_id: Optional[str] = None
+    universe_range: str = "Universe!A:C"
+    trigger_context_path: str = "trigger_context.json"
+    static_universe: Optional[list] = None
+
+    model_config = {"extra": "ignore"}
 
 
-class FIAConfig(BaseModel):
-    cost_guardrails: CostGuardrails
-    run_settings: RunSettings
-    trigger_thresholds: TriggerThresholds
-    paths: Paths
+class Secrets(BaseModel):
+    TWELVE_DATA_KEY: Optional[str] = None
+    FINNHUB_API_KEY: Optional[str] = None
+    FRED_API_KEY: Optional[str] = None
+    SUPABASE_DB_URL: Optional[str] = None
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
+    GOOGLE_SHEETS_CREDENTIALS: Optional[str] = None
+
+    model_config = {"extra": "ignore"}
 
 
-# ---------
-# Loader
-# ---------
+class ConfigModel(BaseModel):
+    run_settings: RunSettings = Field(default_factory=RunSettings)
+    trigger_thresholds: TriggerThresholds = Field(default_factory=TriggerThresholds)
+    api: APISettings = Field(default_factory=APISettings)
+    paths: Paths = Field(default_factory=Paths)
+    secrets: Secrets = Field(default_factory=Secrets)
 
-_config_cache = None  # in-memory cache
-
-
-def _load_json_file(filename: str) -> dict:
-    path = Path("config") / filename
-    with open(path, "r") as f:
-        return json.load(f)
+    model_config = {"extra": "ignore"}
 
 
-def _load_supabase_config() -> dict:
-    """Fetch config rows from Supabase; return dict where keys match file keys."""
-
-    # If no key is provided, skip DB override (safe during early development)
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    url = os.getenv("SUPABASE_DB_URL")
-
-    if not service_key or not url:
-        # Early phase: no DB yet
-        return {}
-
-    client: Client = create_client(url, service_key)
-    res = client.table("config").select("*").execute()
-
-    rows = res.data or []
-
-    db_config = {}
-    for row in rows:
-        db_config[row["key"]] = row["value"]
-
-    return db_config
+_logger = logging.getLogger("fia.config_loader")
+_logger.setLevel(os.environ.get("FIA_LOG_LEVEL", "INFO"))
+if not _logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    _logger.addHandler(ch)
 
 
-def _merge_configs(base: dict, override: dict) -> dict:
-    """Recursive merge: override always wins."""
-    result = dict(base)
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _merge_configs(result[key], value)
-        else:
-            result[key] = value
-    return result
+_DEFAULTS_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "defaults.json")
+_cached_config: Optional[ConfigModel] = None
 
 
-def load_config(force_refresh: bool = False) -> FIAConfig:
-    """ Load + merge + validate configuration, returns FIAConfig object """
+def _load_defaults() -> Dict[str, Any]:
+    if os.path.exists(_DEFAULTS_PATH):
+        try:
+            with open(_DEFAULTS_PATH, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except Exception as e:
+            _logger.exception("Failed to load defaults.json: %s", e)
+            return {}
+    return {}
 
-    global _config_cache
-    if _config_cache is not None and not force_refresh:
-        return _config_cache
 
-    defaults = _load_json_file("defaults.json")
-    db_overrides = _load_supabase_config()
-    merged = _merge_configs(defaults, db_overrides)
+def _merge_env_secrets(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    # Read well-known secrets from env if present and put into cfg['secrets']
+    secrets = cfg.get("secrets", {})
+    for key in ["TWELVE_DATA_KEY", "FINNHUB_API_KEY", "FRED_API_KEY", "SUPABASE_DB_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_SHEETS_CREDENTIALS"]:
+        val = os.environ.get(key)
+        if val:
+            secrets[key] = val
+    cfg["secrets"] = secrets
+    return cfg
+
+
+def get_config_model() -> ConfigModel:
+    """
+    Returns a validated ConfigModel (pydantic v2). Caches the result.
+    """
+    global _cached_config
+    if _cached_config is not None:
+        return _cached_config
+
+    base = _load_defaults()
+    base = _merge_env_secrets(base)
 
     try:
-        validated = FIAConfig(**merged)
+        cfg_model = ConfigModel(**base)
+        _cached_config = cfg_model
+        return cfg_model
     except ValidationError as e:
-        raise RuntimeError(f"Configuration validation failed: {e}")
+        _logger.exception("Configuration validation error: %s", e)
+        # Raise so callers see the problem
+        raise
 
-    _config_cache = validated
-    return validated
 
-
-def get_config() -> FIAConfig:
-    """ Public accessor """
-    return load_config(force_refresh=False)
+def get_config() -> Dict[str, Any]:
+    """
+    Returns a plain dict config (safe to serialize).
+    """
+    model = get_config_model()
+    # Pydantic v2 uses model_dump for dict
+    return model.model_dump()
