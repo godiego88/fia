@@ -1,8 +1,8 @@
 # fia/config_loader.py
 """
-Config loader for FIA — migrated to Pydantic v2.
-Loads defaults from config/defaults.json, merges Supabase overrides (if available),
-validates against models, and exposes get_config() returning plain dicts (not models).
+Config loader for FIA — Pydantic v2 compatible.
+Loads defaults from config/defaults.json, merges environment secrets,
+validates, and returns a plain dict via model_dump().
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
-# Pydantic v2 uses model_config instead of Config
+# ----- Models (Pydantic v2) -----
 class RunSettings(BaseModel):
     dry_run: bool = True
     live_mode: bool = False
@@ -70,6 +70,7 @@ class ConfigModel(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+# ----- Logger & paths -----
 _logger = logging.getLogger("fia.config_loader")
 _logger.setLevel(os.environ.get("FIA_LOG_LEVEL", "INFO"))
 if not _logger.handlers:
@@ -79,9 +80,10 @@ if not _logger.handlers:
 
 
 _DEFAULTS_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "defaults.json")
-_cached_config: Optional[ConfigModel] = None
+_cached_model: Optional[ConfigModel] = None
 
 
+# ----- Helpers -----
 def _load_defaults() -> Dict[str, Any]:
     if os.path.exists(_DEFAULTS_PATH):
         try:
@@ -94,9 +96,15 @@ def _load_defaults() -> Dict[str, Any]:
 
 
 def _merge_env_secrets(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    # Read well-known secrets from env if present and put into cfg['secrets']
-    secrets = cfg.get("secrets", {})
-    for key in ["TWELVE_DATA_KEY", "FINNHUB_API_KEY", "FRED_API_KEY", "SUPABASE_DB_URL", "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_SHEETS_CREDENTIALS"]:
+    secrets = cfg.get("secrets", {}) or {}
+    for key in [
+        "TWELVE_DATA_KEY",
+        "FINNHUB_API_KEY",
+        "FRED_API_KEY",
+        "SUPABASE_DB_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "GOOGLE_SHEETS_CREDENTIALS",
+    ]:
         val = os.environ.get(key)
         if val:
             secrets[key] = val
@@ -104,31 +112,31 @@ def _merge_env_secrets(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cfg
 
 
+# ----- Public API -----
 def get_config_model() -> ConfigModel:
     """
-    Returns a validated ConfigModel (pydantic v2). Caches the result.
+    Return validated ConfigModel (cached).
     """
-    global _cached_config
-    if _cached_config is not None:
-        return _cached_config
+    global _cached_model
+    if _cached_model is not None:
+        return _cached_model
 
     base = _load_defaults()
     base = _merge_env_secrets(base)
 
     try:
-        cfg_model = ConfigModel(**base)
-        _cached_config = cfg_model
-        return cfg_model
+        model = ConfigModel(**base)
+        _cached_model = model
+        return model
     except ValidationError as e:
         _logger.exception("Configuration validation error: %s", e)
-        # Raise so callers see the problem
+        # re-raise to make errors visible to caller
         raise
 
 
 def get_config() -> Dict[str, Any]:
     """
-    Returns a plain dict config (safe to serialize).
+    Return a plain dict representation of config (Pydantic v2 model_dump).
     """
     model = get_config_model()
-    # Pydantic v2 uses model_dump for dict
     return model.model_dump()
