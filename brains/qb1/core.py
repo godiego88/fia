@@ -465,7 +465,8 @@ def run_qb1(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if not ticker:
             continue
         sig = build_stage1_signal(ticker, name=name, config=config)
-        signals.append(sig)
+        from brains.nb1.core import attach_nb1
+        signals.append(attach_nb1(sig))
         processed += 1
 
     # Apply threshold to produce triggers
