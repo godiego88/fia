@@ -1,59 +1,32 @@
-# runners/stage1_runner.py
-"""
-Stage 1 Runner — Final Production Version
-Runs QB1, loads config, logs to Supabase (safe), and writes trigger_context.json.
-"""
-
-import os
-import json
-import logging
+import uuid
 from datetime import datetime
-
 from fia.config_loader import get_config
-from fia.supabase_client import get_supabase, safe_log_run_start, safe_log_run_end
+from fia.supabase_client import safe_log_run_start, safe_log_run_end
 from brains.qb1.core import run_qb1
-
-logger = logging.getLogger("fia.stage1")
-logger.setLevel(os.environ.get("FIA_LOG_LEVEL", "INFO"))
-if not logger.handlers:
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(ch)
 
 
 def main():
-    # Load config
     config = get_config()
-    live_mode = config["run_settings"].get("live_mode", False)
 
-    # Start Supabase run log (safe — no crash if disabled)
-    run_id = safe_log_run_start(
-        stage="stage1",
-        config_snapshot=config,
-        live_mode=live_mode
-    )
+    run_id = str(uuid.uuid4())
+    started_at = datetime.utcnow().isoformat() + "Z"
 
-    try:
-        # Run QB1 brain
-        logger.info("Running QB1…")
-        result = run_qb1(config=config)
+    safe_log_run_start(run_id, "stage1", {"started_at": started_at})
 
-        # Determine output path
-        output_path = config["paths"].get("trigger_context_path", "trigger_context.json")
+    # Read config using dot-access (Pydantic model)
+    live_mode = config.run_settings.live_mode
+    dry_limit = config.run_settings.dry_limit
 
-        # Write artifact
-        with open(output_path, "w") as f:
-            json.dump(result, f, indent=2, default=str)
+    print(f"[Stage1] live_mode={live_mode} dry_limit={dry_limit}")
 
-        logger.info(f"Stage1: trigger_context.json written to {output_path}")
+    result = run_qb1(config=config)
 
-        # End log
-        safe_log_run_end(run_id, success=True, details={"signals": len(result.get("signals", []))})
+    ended_at = datetime.utcnow().isoformat() + "Z"
+    safe_log_run_end(run_id, True, {"ended_at": ended_at, "meta": result.get("meta")})
 
-    except Exception as e:
-        logger.exception(f"Stage1 failed: {e}")
-        safe_log_run_end(run_id, success=False, details={"error": str(e)})
-        raise
+    print("Stage1 complete.")
+    print(f"Signals: {len(result.get('signals'))}")
+    print(f"Triggers: {len(result.get('triggers'))}")
 
 
 if __name__ == "__main__":
