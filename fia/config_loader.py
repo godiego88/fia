@@ -1,69 +1,28 @@
-# fia/config_loader.py
-"""
-Config Loader (Final — Pydantic v2 Compatible)
-
-Loads config/defaults.json and applies environment overrides.
-Also supports Supabase-related settings in v2.
-"""
-
 from __future__ import annotations
-import json
 import os
-from pathlib import Path
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
+from dotenv import load_dotenv
 
-# ---------------------------------------------------------
-# Pydantic Models (These are v2 compatible)
-# ---------------------------------------------------------
-
-class TriggerThresholds(BaseModel):
-    signal_score_min: float = 0.1
-    zscore_abs_min: float = 1.0
-    max_signals_per_run: int = 5
-    universe: list[str] | None = None
+load_dotenv()
 
 
 class RunSettings(BaseModel):
-    dry_run: bool = True
+    live_mode: bool = False
+    log_to_supabase: bool = False
 
 
 class FIAConfig(BaseModel):
-    trigger_thresholds: TriggerThresholds
+    supabase_url: str
+    supabase_key: str
     run_settings: RunSettings
 
 
-# ---------------------------------------------------------
-# Loader Function
-# ---------------------------------------------------------
-
-def load_json(path: str | Path) -> dict:
-    with open(path, "r") as f:
-        return json.load(f)
-
-
 def get_config() -> FIAConfig:
-    """
-    Load defaults + apply Supabase or environment overrides.
-    Returns a FIAConfig object (Pydantic v2).
-    """
-    base_path = Path(__file__).resolve().parent.parent
-    config_path = base_path / "config" / "defaults.json"
-
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config not found: {config_path}")
-
-    # Load JSON defaults
-    data = load_json(config_path)
-
-    # Apply environment overrides (Pydantic-safe)
-    dry_run_env = os.getenv("FIA_DRY_RUN")
-    if dry_run_env is not None:
-        data["run_settings"]["dry_run"] = dry_run_env.lower() == "true"
-
-    try:
-        cfg = FIAConfig(**data)
-    except ValidationError as e:
-        print("CONFIG VALIDATION ERROR:", e)
-        raise
-
-    return cfg
+    return FIAConfig(
+        supabase_url=os.getenv("SUPABASE_URL", ""),
+        supabase_key=os.getenv("SUPABASE_KEY", ""),
+        run_settings=RunSettings(
+            live_mode=os.getenv("LIVE_MODE", "false").lower() == "true",
+            log_to_supabase=os.getenv("LOG_TO_SUPABASE", "false").lower() == "true"
+        )
+    )
