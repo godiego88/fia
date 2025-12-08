@@ -1,0 +1,5 @@
+{
+  "use_env": true,
+  "secrets_file": "config/secrets.json",
+  "supabase_enabled": true
+}
