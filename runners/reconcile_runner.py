@@ -1,54 +1,55 @@
+# runners/reconcile_runner.py
 from __future__ import annotations
 
+# Deterministic local .env loading for parity with CI
 from dotenv import load_dotenv
 load_dotenv()
 
-import json
+import uuid, json
 from datetime import datetime, timezone
-
 from fia.config_loader import get_config
-from fia.supabase_client import safe_log_run_start, safe_log_run_end, safe_write_result
+from fia.supabase_client import safe_log_run_start, safe_log_run_end, get_supabase
 from brains.reconcile.core import reconcile
+from brains.qb1.core import run_qb1
+from brains.qb2.core import refine_queries
 from brains.nb1.core import build_nb1_from_qub
 from brains.nb2.core import build_nb2_from_reconcile_inputs
 
-
-def now():
+def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
+def write_report(obj, path: str):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2, default=str)
 
 def main():
     cfg = get_config()
-    run_id = f"reconcile-{int(datetime.now().timestamp())}"
+    run_id = str(uuid.uuid4())
+    safe_log_run_start(run_id, "reconcile", {"started_at": now_iso()})
 
-    safe_log_run_start(run_id, "reconcile", {"started_at": now()})
-
-    deep = json.load(open(cfg.paths.deep_results_path))
-
-    out = {"run_id": run_id, "generated_at": now(), "items": []}
-
-    for rec in deep.get("results", []):
-        ticker = rec["ticker"]
-        qb1 = rec["qb1"]
-        qb2 = rec["qb2"]
+    # Build a single reconcile summary for full universe (basic)
+    universe_qb1 = run_qb1()
+    report = []
+    for qb1 in universe_qb1:
+        qb2 = refine_queries(qb1)
         nb1 = build_nb1_from_qub(qb2)
-        nb2 = build_nb2_from_reconcile_inputs(ticker, qb2, nb1)
-        final = reconcile(qb1, qb2, nb1, nb2)
+        nb2 = build_nb2_from_reconcile_inputs(qb1.ticker, qb2, nb1)
+        rec = reconcile(qb1, qb2, nb1, nb2)
+        report.append(rec.model_dump())
+        
+        # push to results table and record anomalies if needed
+        try:
+            from fia.supabase_client import safe_write_result
+            safe_write_result("results", {"run_id": run_id, "ticker": rec.ticker, "payload": rec.model_dump()})
+            # if red flags exist in nb2 or rec: push an anomaly_rollups entry
+            if rec.nb2 and getattr(rec.nb2, "red_flags", None):
+                safe_write_result("anomaly_rollups", {"run_id": run_id, "ticker": rec.ticker, "red_flags": rec.nb2.red_flags})
+        except Exception:
+            pass
 
-        out["items"].append(final.model_dump())
-
-        safe_write_result("results", {
-            "run_id": run_id,
-            "ticker": ticker,
-            "payload": final.model_dump()
-        })
-
-    with open(cfg.paths.reconcile_report_path, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=2)
-
-    safe_log_run_end(run_id, True, {"ended_at": now()})
-    print(f"Reconcile complete → {cfg.paths.reconcile_report_path}")
-
+    write_report({"run_id": run_id, "timestamp": now_iso(), "report": report}, cfg.paths.reconcile_report_path)
+    safe_log_run_end(run_id, True, {"ended_at": now_iso(), "n_items": len(report)})
+    print(f"Reconcile complete: {len(report)} items -> {cfg.paths.reconcile_report_path}")
 
 if __name__ == "__main__":
     main()
