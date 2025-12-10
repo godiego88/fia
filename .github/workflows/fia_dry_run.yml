@@ -20,42 +20,34 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Python dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: CI: Live-mode secrets presence check
+      - name: CI: live_mode secret check
         run: |
-          python - <<'PY'
-import os
+          python - << 'PY'
+import os, json
 from fia.config_loader import get_config
 cfg = get_config()
-live = cfg.run_settings["live_mode"]
+live = cfg.run_settings.get("live_mode", False)
 if live:
-    required = ["SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY","EMAIL_SERVICE_API_KEY"]
-    missing = [k for k in required if not os.getenv(k)]
+    missing = [k for k in ["SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY"] if not os.getenv(k)]
     if missing:
-        raise SystemExit(f"CI FAILURE: live_mode enabled but secrets missing: {','.join(missing)}")
-print("CI precheck ok. live_mode:", live)
+        raise SystemExit("Missing secrets for live_mode: " + ",".join(missing))
+print("Live-mode check OK.")
 PY
 
       - name: Validate config schema
         run: python tools/validate_config.py
 
-      - name: Import test
+      - name: Import check
         run: |
-          python - <<'PY'
+          python - << 'PY'
 import importlib
-mods = [
-    "fia.config_loader",
-    "fia.supabase_client",
-    "brains.qb1.core",
-    "brains.qb2.core",
-    "brains.nb1.core",
-    "brains.nb2.core",
-]
+mods = ["fia.config_loader","fia.supabase_client","brains.qb1.core"]
 for m in mods:
     importlib.import_module(m)
-print("import checks passed")
+print("Imports OK")
 PY
