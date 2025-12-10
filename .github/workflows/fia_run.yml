@@ -1,0 +1,68 @@
+name: FIA Pipeline
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  fia_run:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+      TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}
+      GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+      EMAIL_SERVICE_API_KEY: ${{ secrets.EMAIL_SERVICE_API_KEY }}
+      EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+      EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps (for weasyprint)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpangocairo-1.0-0 libcairo2 libffi-dev libssl-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Stage 1
+        run: python -m runners.stage1_runner
+
+      - name: Upload trigger_context artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trigger_context
+          path: trigger_context.json
+
+      - name: Dispatch Stage 2 to Fly
+        run: |
+          echo "Dispatching Stage 2 to Fly.io. Implementation in Session 5."
+
+      - name: Upload deep results
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep_results
+          path: deep_results.json
+
+      - name: Run Reconcile
+        run: python -m runners.reconcile_runner
+
+      - name: Upload reconcile report
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconcile_report
+          path: reconcile_report.json
