@@ -1,19 +1,15 @@
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+.venv/
 
-# Environments
+# Local environment and secrets
 .env
-venv/
+config/secrets.json
 
-# OS files
+# OS
 .DS_Store
-Thumbs.db
 
-# Temporary files
-*.tmp
-
-# FIA local artifacts (not used yet)
-trigger_context.json
-deep_results.json
+# Logs
+*.log
