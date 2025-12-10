@@ -1,4 +1,3 @@
--- migrations/0001_initial.sql
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS run_log (
