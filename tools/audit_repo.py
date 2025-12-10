@@ -1,22 +1,15 @@
-import re
-from pathlib import Path
+import re, sys, pathlib
 
-runner_files = [
-    Path("runners/stage1_runner.py"),
-    Path("runners/stage2_runner.py"),
-    Path("runners/reconcile_runner.py")
-]
+base = pathlib.Path("runners")
+fail = False
 
-missing = []
-
-for f in runner_files:
+for f in base.glob("*_runner.py"):
     text = f.read_text()
-    if "load_dotenv()" not in text:
-        missing.append(str(f))
+    if "load_dotenv()" not in text.split("\n")[0:10]:
+        print(f"ERROR: {f} missing load_dotenv() at top")
+        fail = True
 
-if missing:
-    print("FAIL: These runners are missing load_dotenv():")
-    for m in missing:
-        print(" -", m)
-else:
-    print("OK: All runners contain load_dotenv() as required.")
+if fail:
+    sys.exit(1)
+
+print("All runners OK.")
