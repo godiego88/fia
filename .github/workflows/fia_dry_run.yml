@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
 
 jobs:
   dry_run:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -28,7 +28,7 @@ jobs:
       - name: CI: Live-mode secrets presence check
         run: |
           python - <<'PY'
-import json, os
+import os
 from fia.config_loader import get_config
 cfg = get_config()
 live = cfg.run_settings["live_mode"]
@@ -36,19 +36,26 @@ if live:
     required = ["SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY","EMAIL_SERVICE_API_KEY"]
     missing = [k for k in required if not os.getenv(k)]
     if missing:
-        raise SystemExit("CI FAILURE: live_mode enabled but secrets missing: " + ",".join(missing))
+        raise SystemExit(f"CI FAILURE: live_mode enabled but secrets missing: {','.join(missing)}")
 print("CI precheck ok. live_mode:", live)
 PY
 
       - name: Validate config schema
         run: python tools/validate_config.py
 
-      - name: Import check
+      - name: Import test
         run: |
           python - <<'PY'
 import importlib
-mods = ["fia.config_loader","fia.supabase_client","brains.qb1.core"]
+mods = [
+    "fia.config_loader",
+    "fia.supabase_client",
+    "brains.qb1.core",
+    "brains.qb2.core",
+    "brains.nb1.core",
+    "brains.nb2.core",
+]
 for m in mods:
     importlib.import_module(m)
-print("imports ok")
+print("import checks passed")
 PY
