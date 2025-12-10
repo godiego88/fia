@@ -1,19 +1,22 @@
 {
-  "cost_guardrails": {
-    "monthly_hard_stop": 1.80,
-    "reservation_ttl_hours": 4
-  },
   "run_settings": {
     "dry_run": true,
-    "max_concurrent_fly_jobs": 1
+    "live_mode": false,
+    "dry_limit": 5
   },
   "trigger_thresholds": {
-    "signal_score_min": 0.15,
-    "zscore_abs_min": 2.0,
-    "max_signals_per_run": 15
+    "zscore_threshold": 2.5,
+    "min_volume": 100000
+  },
+  "api": {
+    "yfinance": {},
+    "finnhub": {},
+    "twelvedata": {}
   },
   "paths": {
-    "stage1_artifact": "trigger_context.json",
-    "stage2_artifact": "deep_results.json"
+    "trigger_context_path": "trigger_context.json",
+    "deep_results_path": "deep_results.json",
+    "reconcile_report_path": "reconcile_report.json",
+    "static_universe": []
   }
 }
