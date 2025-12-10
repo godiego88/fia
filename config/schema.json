@@ -1,41 +1,37 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "FIA Configuration Schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "cost_guardrails": {
-      "type": "object",
-      "properties": {
-        "monthly_hard_stop": { "type": "number" },
-        "reservation_ttl_hours": { "type": "number" }
-      },
-      "required": ["monthly_hard_stop", "reservation_ttl_hours"]
-    },
     "run_settings": {
       "type": "object",
       "properties": {
         "dry_run": { "type": "boolean" },
-        "max_concurrent_fly_jobs": { "type": "number" }
+        "live_mode": { "type": "boolean" },
+        "dry_limit": { "type": "number" }
       },
-      "required": ["dry_run", "max_concurrent_fly_jobs"]
+      "required": ["dry_run","live_mode","dry_limit"]
     },
     "trigger_thresholds": {
-      "type": "object",
-      "properties": {
-        "signal_score_min": { "type": "number" },
-        "zscore_abs_min": { "type": "number" },
-        "max_signals_per_run": { "type": "number" }
-      },
-      "required": ["signal_score_min", "zscore_abs_min", "max_signals_per_run"]
+      "type": "object"
+    },
+    "api": {
+      "type": "object"
     },
     "paths": {
       "type": "object",
       "properties": {
-        "stage1_artifact": { "type": "string" },
-        "stage2_artifact": { "type": "string" }
+        "trigger_context_path": { "type": "string" },
+        "deep_results_path": { "type": "string" },
+        "reconcile_report_path": { "type": "string" },
+        "static_universe": { "type": "array" }
       },
-      "required": ["stage1_artifact", "stage2_artifact"]
+      "required": [
+        "trigger_context_path",
+        "deep_results_path",
+        "reconcile_report_path",
+        "static_universe"
+      ]
     }
   },
-  "required": ["cost_guardrails", "run_settings", "trigger_thresholds", "paths"]
+  "required": ["run_settings","paths"]
 }
