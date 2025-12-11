@@ -1,0 +1,36 @@
+{
+  "run_settings": {
+    "dry_run": true,
+    "live_mode": false,
+    "dry_limit": 0
+  },
+  "trigger_thresholds": {
+    "score": 2.0,
+    "z_threshold": 2.0,
+    "anomaly_lookback": 10,
+    "signal_score_min": 0.1,
+    "zscore_abs_min": 1.0,
+    "max_signals_per_run": 25
+  },
+  "api": {
+    "yfinance": {},
+    "finnhub": {},
+    "twelvedata": {}
+  },
+  "paths": {
+    "universe_sheet_id": null,
+    "universe_range": "Universe!A:C",
+    "trigger_context_path": "trigger_context.json",
+    "deep_results_path": "deep_results.json",
+    "reconcile_report_path": "reconcile_report.json",
+    "static_universe": null
+  },
+  "secrets": {
+    "TWELVE_DATA_KEY": null,
+    "FINNHUB_API_KEY": null,
+    "FRED_API_KEY": null,
+    "SUPABASE_URL": null,
+    "SUPABASE_SERVICE_ROLE_KEY": null,
+    "GOOGLE_SHEETS_CREDENTIALS": null
+  }
+}
