@@ -7,31 +7,81 @@
       "properties": {
         "dry_run": { "type": "boolean" },
         "live_mode": { "type": "boolean" },
-        "dry_limit": { "type": "number" }
+        "dry_limit": { "type": "integer" }
       },
-      "required": ["dry_run","live_mode","dry_limit"]
+      "required": ["dry_run", "live_mode", "dry_limit"]
     },
     "trigger_thresholds": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "score": { "type": "number" },
+        "z_threshold": { "type": "number" },
+        "anomaly_lookback": { "type": "integer" },
+        "signal_score_min": { "type": "number" },
+        "zscore_abs_min": { "type": "number" },
+        "max_signals_per_run": { "type": "integer" }
+      },
+      "required": [
+        "score",
+        "z_threshold",
+        "anomaly_lookback",
+        "signal_score_min",
+        "zscore_abs_min",
+        "max_signals_per_run"
+      ]
     },
     "api": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "yfinance": { "type": "object" },
+        "finnhub": { "type": "object" },
+        "twelvedata": { "type": "object" }
+      },
+      "required": ["yfinance", "finnhub", "twelvedata"]
     },
     "paths": {
       "type": "object",
       "properties": {
+        "universe_sheet_id": { "type": ["string", "null"] },
+        "universe_range": { "type": "string" },
         "trigger_context_path": { "type": "string" },
         "deep_results_path": { "type": "string" },
         "reconcile_report_path": { "type": "string" },
-        "static_universe": { "type": "array" }
+        "static_universe": {
+          "anyOf": [
+            { "type": "array", "items": { "type": "string" } },
+            { "type": "null" }
+          ]
+        }
       },
       "required": [
+        "universe_sheet_id",
+        "universe_range",
         "trigger_context_path",
         "deep_results_path",
         "reconcile_report_path",
         "static_universe"
       ]
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "TWELVE_DATA_KEY": { "type": ["string", "null"] },
+        "FINNHUB_API_KEY": { "type": ["string", "null"] },
+        "FRED_API_KEY": { "type": ["string", "null"] },
+        "SUPABASE_URL": { "type": ["string", "null"] },
+        "SUPABASE_SERVICE_ROLE_KEY": { "type": ["string", "null"] },
+        "GOOGLE_SHEETS_CREDENTIALS": { "type": ["string", "null"] }
+      },
+      "required": [
+        "TWELVE_DATA_KEY",
+        "FINNHUB_API_KEY",
+        "FRED_API_KEY",
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "GOOGLE_SHEETS_CREDENTIALS"
+      ]
     }
   },
-  "required": ["run_settings","paths"]
+  "required": ["run_settings", "trigger_thresholds", "api", "paths", "secrets"]
 }
